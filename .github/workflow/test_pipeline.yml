@@ -1,0 +1,46 @@
+name: Test IRIS Pipeline
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  test_model:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - uses: actions/setup-python@v4
+        with:
+          python-version: "3.10"
+
+      - uses: iterative/setup-cml@v2
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip setuptools wheel
+          pip install --prefer-binary -r requirements.txt
+
+      - name: Train the model
+        run: python train.py
+
+      - name: Run unit tests
+        continue-on-error: true
+        run: |
+          mkdir -p reports
+          python -m unittest discover -s tests -v 2>&1 | tee reports/test_output.txt
+
+      - name: Create CML report
+        env:
+          REPO_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "test output" > report.md
+          echo '```' >> report.md
+          cat reports/test_output.txt >> report.md
+          echo '```' >> report.md
+          echo "metrics from training" >> report.md
+          cat metrics.csv >> report.md
+          cml comment create --publish report.md
